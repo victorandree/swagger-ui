@@ -10,6 +10,7 @@ SwaggerUi.Views.OperationView = Backbone.View.extend({
     'click .toggleOperation'  : 'toggleOperationContent',
     'mouseenter .api-ic'      : 'mouseEnter',
     'dblclick .curl'          : 'selectText',
+    'change [name=responseContentType]' : 'showSnippet'
   },
 
   initialize: function(opts) {
@@ -84,7 +85,7 @@ SwaggerUi.Views.OperationView = Backbone.View.extend({
   // Note: copied from CoffeeScript compiled file
   // TODO: redactor
   render: function() {
-    var a, auth, auths, code, contentTypeModel, isMethodSubmissionSupported, k, key, l, len, len1, len2, len3, len4, m, modelAuths, n, o, p, param, q, ref, ref1, ref2, ref3, ref4, ref5, responseContentTypeView, responseSignatureView, schema, schemaObj, scopeIndex, signatureModel, statusCode, successResponse, type, v, value;
+    var a, auth, auths, code, contentTypeModel, isMethodSubmissionSupported, k, key, l, len, len1, len2, len3, len4, m, modelAuths, n, o, p, param, q, ref, ref1, ref2, ref3, ref4, ref5, responseContentTypeView, responseSignatureView, schema, schemaObj, scopeIndex, signatureModel, statusCode, successResponse, type, v, value, produces, isXML, isJSON;
     isMethodSubmissionSupported = jQuery.inArray(this.model.method, this.model.supportedSubmitMethods()) >= 0;
     if (!isMethodSubmissionSupported) {
       this.model.isReadOnly = true;
@@ -155,7 +156,8 @@ SwaggerUi.Views.OperationView = Backbone.View.extend({
           code: code,
           message: value.description,
           responseModel: schema,
-          headers: value.headers
+          headers: value.headers,
+          schema: schemaObj
         });
       }
     }
@@ -163,6 +165,10 @@ SwaggerUi.Views.OperationView = Backbone.View.extend({
       this.model.responseMessages = [];
     }
     signatureModel = null;
+    produces = this.model.produces;
+    isXML = this.contains(produces, 'xml');
+    isJSON = isXML ? this.contains(produces, 'json') : true;
+
     if (this.model.successResponse) {
       successResponse = this.model.successResponse;
       for (key in successResponse) {
@@ -172,9 +178,14 @@ SwaggerUi.Views.OperationView = Backbone.View.extend({
           this.model.successDescription = value.description;
           this.model.headers = this.parseResponseHeaders(value.headers);
           signatureModel = {
-            sampleJSON: JSON.stringify(value.createJSONSample(), void 0, 2),
+            sampleJSON: isJSON ? JSON.stringify(SwaggerUi.partials.signature.createJSONSample(value), void 0, 2) : false,
             isParam: false,
-            signature: value.getMockSignature()
+            sampleXML: isXML ? SwaggerUi.partials.signature.createXMLSample(value.name, value.definition, value.models) : false,
+            signature: SwaggerUi.partials.signature.getModelSignature(value.name, value.definition, value.models, value.modelPropertyMacro)
+          };
+        } else {
+          signatureModel = {
+            signature: SwaggerUi.partials.signature.getPrimitiveSignature(value)
           };
         }
       }
@@ -238,9 +249,44 @@ SwaggerUi.Views.OperationView = Backbone.View.extend({
     ref5 = this.model.responseMessages;
     for (q = 0, len4 = ref5.length; q < len4; q++) {
       statusCode = ref5[q];
+      statusCode.isXML = isXML;
+      statusCode.isJSON = isJSON;
+      if (!_.isUndefined(statusCode.headers)) {
+        statusCode.headers = this.parseHeadersType(statusCode.headers);
+      }
       this.addStatusCode(statusCode);
     }
+
+    this.showSnippet();
     return this;
+  },
+
+  parseHeadersType: function (headers) {
+    var map = {
+      'string': {
+        'date-time': 'dateTime',
+        'date'     : 'date'
+      }
+    };
+
+    _.forEach(headers, function (header) {
+      var value;
+      header = header || {};
+      value = map[header.type] && map[header.type][header.format];
+      if (!_.isUndefined(value)) {
+        header.type = value;
+      }
+    });
+
+    return headers;
+  },
+
+  contains: function (produces, type) {
+    return produces.filter(function (val) {
+      if (val.indexOf(type) > -1) {
+        return true;
+      }
+    }).length;
   },
 
   parseResponseHeaders: function (data) {
@@ -520,7 +566,7 @@ SwaggerUi.Views.OperationView = Backbone.View.extend({
     reg = /(>)(<)(\/*)/g;
     wsexp = /[ ]*(.*)[ ]+\n/g;
     contexp = /(<.+>)(.+\n)/g;
-    xml = xml.replace(reg, '$1\n$2$3').replace(wsexp, '$1\n').replace(contexp, '$1\n$2');
+    xml = xml.replace(/\r\n/g, '\n').replace(reg, '$1\n$2$3').replace(wsexp, '$1\n').replace(contexp, '$1\n$2');
     pad = 0;
     formatted = '';
     lines = xml.split('\n');
@@ -672,6 +718,15 @@ SwaggerUi.Views.OperationView = Backbone.View.extend({
         var fileName = response.url.substr(response.url.lastIndexOf('/') + 1);
         var download = [type, fileName, href].join(':');
 
+        // Use filename from response header
+        var disposition = headers['content-disposition'] || headers['Content-Disposition'];
+        if(typeof disposition !== 'undefined') {
+          var responseFilename = /filename=([^;]*);?/.exec(disposition);
+          if(responseFilename !== null && responseFilename.length > 1) {
+            download = responseFilename[1];
+          }
+        }
+
         a.setAttribute('href', href);
         a.setAttribute('download', download);
         a.innerText = 'Download ' + fileName;
@@ -754,6 +809,24 @@ SwaggerUi.Views.OperationView = Backbone.View.extend({
       return result.length > 0 ? result : null;
     } else {
       return textArea.value;
+    }
+  },
+
+  showSnippet: function () {
+    var contentTypeEl = this.$('[name=responseContentType]');
+    var xmlSnippetEl = this.$('.operation-status .snippet_xml, .response-class .snippet_xml');
+    var jsonSnippetEl = this.$('.operation-status .snippet_json, .response-class .snippet_json');
+    var contentType;
+
+    if (!contentTypeEl.length) { return; }
+    contentType = contentTypeEl.val();
+
+    if (contentType.indexOf('xml') > -1) {
+      xmlSnippetEl.show();
+      jsonSnippetEl.hide();
+    } else {
+      jsonSnippetEl.show();
+      xmlSnippetEl.hide();
     }
   },
 
