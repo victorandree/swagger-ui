@@ -8,7 +8,7 @@
     }
   ],
   "description": "Swagger UI is a dependency-free collection of HTML, JavaScript, and CSS assets that dynamically generate beautiful documentation from a Swagger-compliant API",
-  "version": "2.1.8-intuit",
+  "version": "2.1.9-intuit",
   "homepage": "http://swagger.io",
   "license": "Apache-2.0",
   "main": "dist/swagger-ui.js",
@@ -57,7 +57,7 @@
     "mocha": "^2.1.0",
     "phantomjs": "1.9.19",
     "selenium-webdriver": "^2.45.0",
-    "swagger-client": "2.1.13-intuit",
+    "swagger-client": "2.1.14-intuit",
     "sinon-chai": "2.8.0"
   }
 }
