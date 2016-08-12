@@ -12,6 +12,7 @@
   "homepage": "http://swagger.io",
   "license": "Apache-2.0",
   "main": "dist/swagger-ui.js",
+  "bin": "./bin/cli.js",
   "scripts": {
     "build": "npm run handlebars && gulp",
     "handlebars": "./node_modules/handlebars/bin/handlebars ./src/main/template -f ./src/main/template/templates.js && gulp handlebars",
@@ -61,5 +62,10 @@
     "selenium-webdriver": "^2.45.0",
     "sinon-chai": "2.8.0",
     "swagger-client": "2.1.18"
+  },
+  "dependencies": {
+    "connect-livereload": "^0.5.4",
+    "livereload": "^0.5.0",
+    "serve-static": "^1.11.1"
   }
 }
